@@ -1,0 +1,1 @@
+Converts a 32-bit input from an array of switches to a decimal value and displays it on a 10 digit array of seven segment displays.
