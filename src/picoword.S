@@ -19,8 +19,50 @@ picoword:
     b loop              // Start the main loop
 
 setup:
-    ldr r0, =0xd0000020   // Address for output enable
-    ldr r1, =0x398        // 3,4,7,8,9 as outputs, 5 as input
+    // 1. Configure GPIO pins to use the SIO function (Function 5)
+    // Without this, SIO registers don't actually control the physical pins
+    ldr r0, =0x40014000   // IO_BANK0 base address
+    mov r1, #5            // SIO function code
+    
+    // Pin 3
+    mov r2, #3
+    lsl r3, r2, #3        // pin * 8 to get offset
+    add r4, r0, r3
+    str r1, [r4]
+    
+    // Pin 4
+    mov r2, #4
+    lsl r3, r2, #3
+    add r4, r0, r3
+    str r1, [r4]
+    
+    // Pin 5
+    mov r2, #5
+    lsl r3, r2, #3
+    add r4, r0, r3
+    str r1, [r4]
+    
+    // Pin 7
+    mov r2, #7
+    lsl r3, r2, #3
+    add r4, r0, r3
+    str r1, [r4]
+    
+    // Pin 8
+    mov r2, #8
+    lsl r3, r2, #3
+    add r4, r0, r3
+    str r1, [r4]
+    
+    // Pin 9
+    mov r2, #9
+    lsl r3, r2, #3
+    add r4, r0, r3
+    str r1, [r4]
+    
+    // 2. Set the output directions
+    ldr r0, =0xd0000020   // SIO_GPIO_OE (Output Enable register)
+    ldr r1, =0x398        // Bits 3,4,7,8,9 set as outputs; bit 5 as input
     str r1, [r0]          // Apply the config
     bx lr
 
