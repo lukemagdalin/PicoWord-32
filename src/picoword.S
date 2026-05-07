@@ -87,57 +87,58 @@ writeRegister:
     push {r4, r5, r6, r7, lr}
     ldr r4, =0xd0000000   // GPIO base address
     mov r5, #0            // i = 0 (digit counter)
+    mov r1, #1            // Constant 1 for testing bits
 write_outer:
     // Grab the segment codes for both channels (going backwards)
     // R0 is the pointer to our segment values array
-    mov r1, #9
-    sub r1, r1, r5
-    ldrb r2, [r0, r1]     // Byte for channel A
+    mov r2, #9
+    sub r2, r2, r5
+    ldrb r2, [r0, r2]     // Byte for channel A
     
-    mov r1, #4
-    sub r1, r1, r5
-    ldrb r3, [r0, r1]     // Byte for channel B
+    mov r3, #4
+    sub r3, r3, r5
+    ldrb r3, [r0, r3]     // Byte for channel B
     
     mov r6, #0            // j = 0 (bit counter)
 write_inner:
     // Handle channel A bit
     mov r7, r2
     lsr r7, r6            // Shift current bit to the end
-    tst r7, #1            // Is it 1? (This might still error if #1 is not okay)
+    tst r7, r1            // Use r1 for the constant 1
     beq set_a_low
     
-    ldr r1, =PIN_DATA_OUT_A_MASK
-    ldr r1, [r1]
-    str r1, [r4, #0x14]   // Set pin high
+    ldr r2, =PIN_DATA_OUT_A_MASK
+    ldr r2, [r2]
+    str r2, [r4, #0x14]   // Set pin high
     b clock_pulse
 set_a_low:
-    ldr r1, =PIN_DATA_OUT_A_MASK
-    ldr r1, [r1]
-    str r1, [r4, #0x18]   // Set pin low
+    ldr r2, =PIN_DATA_OUT_A_MASK
+    ldr r2, [r2]
+    str r2, [r4, #0x18]   // Set pin low
 
 clock_pulse:
     // Handle channel B bit
     mov r7, r3
     lsr r7, r6            // Shift current bit to the end
-    tst r7, #1
+    tst r7, r1            // Use r1 for the constant 1
     beq set_b_low
     
-    ldr r1, =PIN_DATA_OUT_B_MASK
-    ldr r1, [r1]
-    str r1, [r4, #0x14]   // Set pin high
+    ldr r2, =PIN_DATA_OUT_B_MASK
+    ldr r2, [r2]
+    str r2, [r4, #0x14]   // Set pin high
     b pulse_clock
 set_b_low:
-    ldr r1, =PIN_DATA_OUT_B_MASK
-    ldr r1, [r1]
-    str r1, [r4, #0x18]   // Set pin low
+    ldr r2, =PIN_DATA_OUT_B_MASK
+    ldr r2, [r2]
+    str r2, [r4, #0x18]   // Set pin low
 
 pulse_clock:
     // Send a clock pulse to push the bits into the shift register
-    ldr r1, =PIN_CLK_OUT_MASK
-    ldr r1, [r1]
-    str r1, [r4, #0x14]   // High
+    ldr r2, =PIN_CLK_OUT_MASK
+    ldr r2, [r2]
+    str r2, [r4, #0x14]   // High
     bl delay_1us
-    str r1, [r4, #0x18]   // Low
+    str r2, [r4, #0x18]   // Low
     bl delay_1us
     
     add r6, r6, #1        // Move to next bit
@@ -183,14 +184,15 @@ decimal_loop:
     mov r2, #0            // Quotient = 0
     mov r3, #0            // Remainder = 0
     mov r5, #31           // Start from MSB
+    mov r6, #1            // Constant 1
 div_bit_loop:
     lsl r3, r3, #1        // Remainder = Remainder * 2
     // Extract bit from r0 at position r5
-    mov r6, #1
-    lsl r6, r5
-    tst r0, r6
+    mov r7, #1
+    lsl r7, r5
+    tst r0, r7
     beq skip_bit
-    orr r3, r3, #1        // Set LSB of remainder
+    orr r3, r3, r6        // Use r6 for the constant 1
 skip_bit:
     cmp r3, #10
     blt skip_sub
@@ -198,8 +200,8 @@ skip_bit:
     add r2, r2, #1        // Increment quotient
 skip_sub:
     sub r5, r5, #1        // Move to next bit
-    cmp r5, #-1           // Check if we've gone past bit 0
-    bne div_bit_loop
+    cmp r5, #0            // Check if we've finished bit 0
+    bge div_bit_loop
     
     // Now r3 is the remainder (r0 % 10)
     // Store the remainder in decimalDigitArray
