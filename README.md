@@ -6,6 +6,7 @@ Make a build folder, change the current directory to it, and run cmake. Make sur
 ```bash
 mkdir build
 cd build
-cmake -DCMAKE_BUILD_TYPE=Debug -DPICO_BOARD=pico ..
+cmake -DCMAKE_BUILD_TYPE=Debug -DPICO_BOARD=pico ../src
+make -j4
 ```
 
