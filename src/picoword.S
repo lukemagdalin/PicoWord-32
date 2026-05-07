@@ -41,41 +41,44 @@ readRegister:
     ldr r4, =0xd0000000   // GPIO base address
     
     // Pull latch low to let registers get values from switches
-    mov r1, #(1 << PIN_LATCH_IN)
+    mov r1, # (1 << PIN_LATCH_IN)
     str r1, [r4, #0x18]   // Clear pin
     
     // Quick clock pulse to trigger the read
-    mov r1, #(1 << PIN_CLK_IN)
+    mov r1, # (1 << PIN_CLK_IN)
     str r1, [r4, #0x14]   // Set pin
     bl delay_1us
     str r1, [r4, #0x18]   // Clear pin
     bl delay_1us
     
     // Pull latch high to lock the values in
-    mov r1, #(1 << PIN_LATCH_IN)
+    mov r1, # (1 << PIN_LATCH_IN)
     str r1, [r4, #0x14]   // Set pin
     
     mov r0, #0            // Clear our result register
-    mov r5, #32           // Use r5 as counter instead of r1
+    mov r5, #32           // We need to read 32 bits total
 read_loop:
     // Check if the data pin is high or low
     ldr r2, [r4, #0x24]   // Read all input pins
-    tst r2, #(1 << PIN_DATA_IN)
-    movne r3, #1          // Bit is 1
-    moveq r3, #0          // Bit is 0
-    
+    mov r1, # (1 << PIN_DATA_IN)
+    tst r2, r1
+    mov r3, #0
+    beq read_bit_zero
+    mov r3, #1
+read_bit_zero:
     // Shift the bit we just read into the result
     lsl r0, r0, #1
     orr r0, r0, r3
     
     // Clock pulse to move to the next bit in the register
-    mov r1, #(1 << PIN_CLK_IN)
+    mov r1, # (1 << PIN_CLK_IN)
     str r1, [r4, #0x14]   // Set
     bl delay_1us
     str r1, [r4, #0x18]   // Clear
     bl delay_1us
     
-    subs r5, r5, #1       // One less bit to go
+    sub r5, r5, #1       // One less bit to go
+    cmp r5, #0
     bne read_loop         // Repeat until all 32 are read
     
     pop {r4, r5, pc}
@@ -88,41 +91,50 @@ write_outer:
     // Grab the segment codes for both channels (going backwards)
     // R0 is the pointer to our segment values array
     mov r1, #9
-    subs r1, r1, r5
+    sub r1, r1, r5
     ldrb r2, [r0, r1]     // Byte for channel A
     
     mov r1, #4
-    subs r1, r1, r5
+    sub r1, r1, r5
     ldrb r3, [r0, r1]     // Byte for channel B
     
     mov r6, #0            // j = 0 (bit counter)
 write_inner:
     // Handle channel A bit
-    lsr r7, r2, r6        // Shift current bit to the end
-    tst r7, #1            // Is it 1?
+    mov r7, r2
+    lsr r7, r6            // Shift current bit to the end
+    tst r7, #1            // Is it 1? (This might still error if #1 is not okay)
     beq set_a_low
-    mov r1, #(1 << PIN_DATA_OUT_A)
+    
+    ldr r1, =PIN_DATA_OUT_A_MASK
+    ldr r1, [r1]
     str r1, [r4, #0x14]   // Set pin high
     b clock_pulse
 set_a_low:
-    mov r1, #(1 << PIN_DATA_OUT_A)
+    ldr r1, =PIN_DATA_OUT_A_MASK
+    ldr r1, [r1]
     str r1, [r4, #0x18]   // Set pin low
 
 clock_pulse:
     // Handle channel B bit
-    lsr r7, r3, r6        // Shift current bit to the end
-    tst r7, #1            // Is it 1?
+    mov r7, r3
+    lsr r7, r6            // Shift current bit to the end
+    tst r7, #1
     beq set_b_low
-    mov r1, #(1 << PIN_DATA_OUT_B)
+    
+    ldr r1, =PIN_DATA_OUT_B_MASK
+    ldr r1, [r1]
     str r1, [r4, #0x14]   // Set pin high
     b pulse_clock
 set_b_low:
-    mov r1, #(1 << PIN_DATA_OUT_B)
+    ldr r1, =PIN_DATA_OUT_B_MASK
+    ldr r1, [r1]
     str r1, [r4, #0x18]   // Set pin low
 
 pulse_clock:
     // Send a clock pulse to push the bits into the shift register
-    mov r1, #(1 << PIN_CLK_OUT)
+    ldr r1, =PIN_CLK_OUT_MASK
+    ldr r1, [r1]
     str r1, [r4, #0x14]   // High
     bl delay_1us
     str r1, [r4, #0x18]   // Low
@@ -139,12 +151,13 @@ pulse_clock:
     pop {r4, r5, r6, r7, pc}
 
 delay_1us:
-    push {r12}
-    mov r12, #30          // Just a small loop to waste some time
+    push {r4}
+    mov r4, #30          // Just a small loop to waste some time
 delay_loop:
-    subs r12, r12, #1
+    sub r4, r4, #1
+    cmp r4, #0
     bne delay_loop
-    pop {r12}
+    pop {r4}
     bx lr
 
 
@@ -174,7 +187,7 @@ div_bit_loop:
     lsl r3, r3, #1        // Remainder = Remainder * 2
     // Extract bit from r0 at position r5
     mov r6, #1
-    lsl r6, r6, r5
+    lsl r6, r5
     tst r0, r6
     beq skip_bit
     orr r3, r3, #1        // Set LSB of remainder
@@ -184,7 +197,8 @@ skip_bit:
     sub r3, r3, #10       // Subtract 10 from remainder
     add r2, r2, #1        // Increment quotient
 skip_sub:
-    subs r5, r5, #1       // Move to next bit
+    sub r5, r5, #1        // Move to next bit
+    cmp r5, #-1           // Check if we've gone past bit 0
     bne div_bit_loop
     
     // Now r3 is the remainder (r0 % 10)
@@ -200,6 +214,7 @@ skip_sub:
     bne decimal_loop
     
     pop {r4, r5, r6, pc}
+
 
 
 
@@ -222,3 +237,8 @@ decimalDigitArray:
 
 segmentValues:
     .space 10
+
+PIN_DATA_OUT_A_MASK: .word (1 << PIN_DATA_OUT_A)
+PIN_DATA_OUT_B_MASK: .word (1 << PIN_DATA_OUT_B)
+PIN_CLK_OUT_MASK:    .word (1 << PIN_CLK_OUT)
+
