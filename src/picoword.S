@@ -2,23 +2,22 @@
 # EECE.3170 Microprocessors I
 # University of Massachusetts Lowell
 # March 19, 2026
-.syntax unified            
-.cpu cortex-m0plus          
+    .syntax unified            
+    .cpu cortex-m0plus          
 
-    .equ NUM_DIGITS,        10  # Total segments we are driving
-    .equ PIN_DATA_IN,       5   # Where the data comes IN from the external register
-    .equ PIN_LATCH_IN,      3   # Latch pin to grab the inputs
-    .equ PIN_CLK_IN,        4   # Clock pin for reading
-    .equ PIN_DATA_OUT_A,    7   # Output pin for Bank A
-    .equ PIN_DATA_OUT_B,    8   # Output pin for Bank B
-    .equ PIN_CLK_OUT,       9   # Clock pin for writing out
+    .equ NUM_DIGITS,        10  # Total number of segments
+    .equ PIN_DATA_IN,       5   # Where the data comes in from the switches register
+    .equ PIN_LATCH_IN,      3   # Latch pin for the inputs
+    .equ PIN_CLK_IN,        4   # Clock pin for the inputs
+    .equ PIN_DATA_OUT_A,    7   # Output pin for first 5 registers
+    .equ PIN_DATA_OUT_B,    8   # Output pin for second 5 registers
+    .equ PIN_CLK_OUT,       9   # Clock pin for output
 
-    .equ SIO_BASE,          0xD0000000 # Base address for fast single-cycle GPIO
+    .equ SIO_BASE,          0xD0000000 # Base address for GPIO
     .equ SIO_GPIO_IN,       0x04       # Offset to read pins
     .equ SIO_GPIO_OUT_SET,  0x14       # Offset to turn pins HIGH
     .equ SIO_GPIO_OUT_CLR,  0x18       # Offset to turn pins LOW
-    .equ DELAY_COUNT,       200        # Not used rn but keeping it just in case
-    .equ DELAY,             252        # Magic number loop counter for ~3 microsecond delay
+    .equ DELAY,             252        # 252 clock cycles ~3 microsecond delay 
 
     .global picoword
     .type picoword, %function
@@ -27,18 +26,18 @@ picoword:
     bl      setup               # Jump to setup first
 main_loop:
     bl      loop                # Run the main loop
-    b       main_loop          # Do it again forever
+    b       main_loop          # big loop in the cutt 
 
-    .thumb_func
+    .thumb_func # I dont like this
 setup:
-    push    {r4, lr}            # Save r4 and link register so we can return later
+    push    {r4, lr}     # begone r4
 
-    ldr     r4, =0x40014004     # Pointer to IO_BANK0 base (hardware stuff)
-    movs    r1, #5              # 5 = "SIO" function for Pico pins
+    ldr     r4, =0x40014004     # Pointer to IO_BANK0 base
+    movs    r1, #5              # SIO function for pins
 
     movs    r2, #PIN_LATCH_IN   # Get latch pin number
     lsls    r2, r2, #3          # Multiply by 8 to get the memory offset
-    str     r1, [r4, r2]        # Tell the hardware this pin is controlled by SIO
+    str     r1, [r4, r2]        # SIO config or smth
 
     movs    r2, #PIN_CLK_IN     # Same thing for clock in pin
     lsls    r2, r2, #3
@@ -60,62 +59,62 @@ setup:
     lsls    r2, r2, #3
     str     r1, [r4, r2]
 
-    ldr     r0, =0xD0000024     # SIO_GPIO_OE (Output Enable) register
-    ldr     r1, =0x398          # Bitmask for pins 7, 8, 9 (and maybe 3, 4?)
-    str     r1, [r0]            # Turn on the output pads for our write pins
+    ldr     r0, =0xD0000024     # Output Enable register
+    ldr     r1, =0x398          # Bitmask for pins 3, 4, 7, 8, 9
+    str     r1, [r0]            # Turn on the output for write pins
 
-    ldr     r0, =0xD0000028     # SIO_GPIO_OE_CLR (Output Disable) register
-    movs    r1, #(1 << PIN_DATA_IN) # We want the input pin to be an actual input
+    ldr     r0, =0xD0000028     # Output Disable register
+    movs    r1, #(1 << PIN_DATA_IN) # input pin to be inputting yf
     str     r1, [r0]            # Disable output on data in pin
 
-    pop     {r4, pc}            # Restore registers and return
+    pop     {r4, pc}            # Come back r4 I missed u
 
     .thumb_func
 loop:
-    push    {r4, lr}            # Save state
+    push    {r4, lr}            # Begone again
 
     bl      read_register       # Call read (returns 32-bit value in r0)
-    mov     r4, r0              # Stash it in r4 so it doesn't get overwritten
+    mov     r4, r0              # stash it in r4 so it doesn't get overwritten
 
-    sub    sp, sp, #12         # Grab 12 bytes of stack space (must be word-aligned!)
-    movs    r1, #0              # Get a zero ready
+    sub    sp, sp, #12         # 12 bytes of stack space .word aligned
+    movs    r1, #0              # zero
     str     r1, [sp, #0]        # Zero out first 4 bytes
     str     r1, [sp, #4]        # Zero out next 4 bytes
     str     r1, [sp, #8]        # Zero out last 4 bytes (12 total)
 
-    str     r4, [sp, #0]        # Dump our 32-bit read value into the start of the array
+    str     r4, [sp, #0]        # Dump 32-bit read value into the start of the array
 
-    mov     r0, sp              # Pass the stack pointer (our array address) to write_register
-    bl      write_register      # Send it!
+    mov     r0, sp              # Pass the array address to write_register
+    bl      write_register      # write register, what else
 
-    add     sp, sp, #12         # Give the memory back to the stack
-    pop     {r4, pc}            # Return
+    add     sp, sp, #12         # give the memory back to the stack
+    pop     {r4, pc}            # r4 is back again
 
     .thumb_func
     .global write_register
 write_register:
-    PUSH    {r4, r5, r6, r7, lr} # Save all these registers, we need a lot of them
-    SUB     sp, sp, #12         # Allocate another 12 bytes on stack for the copy
-    MOV     r4, r0              # r4 now holds the address of our input array
+    PUSH    {r4, r5, r6, r7, lr} # Save these registers to stack
+    SUB     sp, sp, #12         # allocate YET another 12 bytes on stack for  copy
+    MOV     r4, r0              # r4 now holds the address of  input array
 
     MOVS    r0, #0              # r0 = index i = 0
 rev_loop:
-    # MOVS    r1, #(NUM_DIGITS - 1) # (Commented out the reverse math for testing!)
-    # SUBS    r1, r1, r0        # (Commented out)
-    # ADDS    r2, r4, r1        # (Commented out)
-    ADDS    r2, r4, r0          # Instead, just copy straight across: r2 = array[i]
+    # MOVS    r1, #(NUM_DIGITS - 1) # commented out to test directly from input to output
+    # SUBS    r1, r1, r0        
+    # ADDS    r2, r4, r1        
+    ADDS    r2, r4, r0          # copy straight across: r2 = [i]
     LDRB    r2, [r2]            # Load the byte at that address
     MOV     r3, sp              # Get stack pointer
     ADDS    r3, r3, r0          # r3 = stack pointer + i
     STRB    r2, [r3]            # Store the byte there
 
     ADDS    r0, r0, #1          # i++
-    CMP     r0, #NUM_DIGITS     # Have we hit 10 elements yet?
+    CMP     r0, #NUM_DIGITS     # stop at num of digits
     blt     rev_loop           # If not, keep looping
 
-    LDR     r4, =SIO_BASE       # Load the SIO base address for fast toggling
-    MOVS    r5, #1              # Prepare a 1
-    LSLS    r5, r5, #PIN_CLK_OUT # Shift it to make a clock pin mask (1 << 9)
+    LDR     r4, =SIO_BASE       # Load the SIO base address
+    MOVS    r5, #1              # 1
+    LSLS    r5, r5, #PIN_CLK_OUT # Shift it to make a clock pin mask
 
     MOVS    r6, #0              # Outer loop counter (i = 0)
 
@@ -123,40 +122,40 @@ outer_loop:
     MOVS    r7, #0              # Inner loop counter (j = 0, bit index)
 
 inner_loop:
-    MOV     r0, sp              # Get array base
-    ADDS    r0, r0, r6          # Add outer loop index (i)
+    MOV     r0, sp              # Get array addr
+    ADDS    r0, r0, r6          # Add outer loop index
     LDRB    r0, [r0]            # Grab the byte from the array
-    LSRS    r0, r0, r7          # Shift right by j to get the current bit into position 0
+    LSRS    r0, r0, r7          # Shift right by j to get the current bit
     MOVS    r1, #1              # Masking value
-    ANDS    r0, r0, r1          # AND it with 1 so r0 is exactly 0 or 1
+    ANDS    r0, r0, r1          # r0 is exactly 0 or 1
 
-    movs    r1, #1              # Prepare to toggle Bank A
-    lsls    r1, r1, #PIN_DATA_OUT_A # r1 = Bank A pin mask
+    movs    r1, #1              # Prepare to toggle channel A
+    lsls    r1, r1, #PIN_DATA_OUT_A # r1 = channel A pin mask
     cmp     r0, #1              # Is our data bit a 1?
     beq     set_a_high         # If yes, branch to set it high
-    str     r1, [r4, #SIO_GPIO_OUT_CLR] # Else, pull Bank A pin LOW
+    str     r1, [r4, #SIO_GPIO_OUT_CLR] # Else, pull channel A pin LOW
     b       done_a             # Skip the high setting
 set_a_high:
-    STR     r1, [r4, #SIO_GPIO_OUT_SET] # Pull Bank A pin HIGH
+    STR     r1, [r4, #SIO_GPIO_OUT_SET] # Pull channel A pin HIGH
 done_a:
 
-    MOVS    r2, #(NUM_DIGITS/2) # Now for Bank B... offset by 5 (NUM_DIGITS/2)
+    MOVS    r2, #(NUM_DIGITS/2) # Now for channel B
     ADDS    r2, r2, r6          # r2 = i + 5
     MOV     r3, sp              # Base array address
     ADDS    r2, r3, r2          # Add offset to base address
-    LDRB    r2, [r2]            # Grab the byte for Bank B
+    LDRB    r2, [r2]            # Grab the byte for channel B
     LSRS    r2, r2, r7          # Shift right by j to isolate bit
     MOVS    r3, #1              # Masking value
     ANDS    r2, r2, r3          # Isolate that LSB
 
-    MOVS    r3, #1              # Prepare to toggle Bank B
-    LSLS    r3, r3, #PIN_DATA_OUT_B # r3 = Bank B pin mask
-    CMP     r2, #1              # Is Bank B's data bit a 1?
+    MOVS    r3, #1              # Prepare to toggle channel B
+    LSLS    r3, r3, #PIN_DATA_OUT_B # r3 = channel B pin mask
+    CMP     r2, #1              # Is channel B's data bit a 1?
     beq     set_b_high         # If yes, branch to high
-    STR     r3, [r4, #SIO_GPIO_OUT_CLR] # Else, pull Bank B pin LOW
+    STR     r3, [r4, #SIO_GPIO_OUT_CLR] # Else, pull channel B pin LOW
     b       done_b             # Skip the high setting
 set_b_high:
-    STR     r3, [r4, #SIO_GPIO_OUT_SET] # Pull Bank B pin HIGH
+    STR     r3, [r4, #SIO_GPIO_OUT_SET] # Pull channel B pin HIGH
 done_b:
 
     LDR     r0, =DELAY      # Load delay counter
@@ -171,13 +170,13 @@ wr_delay_b:
     SUBS    r0, r0, #1          # Count down
     BNE     wr_delay_b         # Loop until zero
 
-    STR     r5, [r4, #SIO_GPIO_OUT_CLR] # Pulse clock pin LOW (finishing the pulse)
+    STR     r5, [r4, #SIO_GPIO_OUT_CLR] # Pulse clock pin LOW
 
-    ADDS    r7, r7, #1          # j++ (move to next bit)
-    CMP     r7, #8              # Have we done all 8 bits in the byte?
+    ADDS    r7, r7, #1          # j++
+    CMP     r7, #8              # all 8 bits
     blt     inner_loop         # If not, do next bit
 
-    ADDS    r6, r6, #1          # i++ (move to next byte)
+    ADDS    r6, r6, #1          # i++ 
     CMP     r6, #(NUM_DIGITS/2) # Have we done 5 bytes?
     blt     outer_loop         # If not, do next byte
 
