@@ -2,8 +2,8 @@
 # EECE.3170 Microprocessors I
 # University of Massachusetts Lowell
 # March 19, 2026
-.syntax unified             # Standard ARM syntax boilerplate
-    .cpu cortex-m0plus          # Compiling for the Pico's brain
+.syntax unified            
+.cpu cortex-m0plus          
 
     .equ NUM_DIGITS,        10  # Total segments we are driving
     .equ PIN_DATA_IN,       5   # Where the data comes IN from the external register
