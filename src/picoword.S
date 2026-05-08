@@ -1,288 +1,267 @@
-	// Authors: Luke Magdalin, Andrew Harnett
-	// EECE.3170 Microprocessors I 
-	// University of Massachusetts Lowell
-    // March 19, 2026
-    
-    .equ NUM_DIGITS, 10
-    .equ PIN_DATA_IN, 5
-    .equ PIN_LATCH_IN, 3
-    .equ PIN_CLK_IN, 4
-    .equ PIN_DATA_OUT_A, 7
-    .equ PIN_DATA_OUT_B, 8
-    .equ PIN_CLK_OUT, 9
-    
-	    .global picoword
-         .type picoword, %function
+# Authors: Luke Magdalin, Andrew Harnett
+# EECE.3170 Microprocessors I
+# University of Massachusetts Lowell
+# March 19, 2026
 
+    .syntax unified
+    .cpu cortex-m0plus
+
+    .equ NUM_DIGITS,        10
+    .equ PIN_DATA_IN,       5
+    .equ PIN_LATCH_IN,      3
+    .equ PIN_CLK_IN,        4
+    .equ PIN_DATA_OUT_A,    7
+    .equ PIN_DATA_OUT_B,    8
+    .equ PIN_CLK_OUT,       9
+
+    .equ SIO_BASE,          0xD0000000
+    .equ SIO_GPIO_IN,       0x04
+    .equ SIO_GPIO_OUT_SET,  0x14
+    .equ SIO_GPIO_OUT_CLR,  0x18
+    .equ DELAY_COUNT,       200
+    .equ DELAY_3US,         252
+
+    .global picoword
+    .type picoword, %function
+    .thumb_func
 picoword:
-    bl setup            // Init the pins
-    b loop              // Start the main loop
+    BL      setup
+.main_loop:
+    BL      loop
+    B       .main_loop
 
+    .thumb_func
 setup:
-    // 1. Configure GPIO pins to use the SIO function (Function 5)
-    // Without this, SIO registers don't actually control the physical pins
-    ldr r0, =0x40014000   // IO_BANK0 base address
-    mov r1, #5            // SIO function code
-    
-    // Pin 3
-    mov r2, #3
-    lsl r3, r2, #3        // pin * 8 to get offset
-    add r4, r0, r3
-    str r1, [r4]
-    
-    // Pin 4
-    mov r2, #4
-    lsl r3, r2, #3
-    add r4, r0, r3
-    str r1, [r4]
-    
-    // Pin 5
-    mov r2, #5
-    lsl r3, r2, #3
-    add r4, r0, r3
-    str r1, [r4]
-    
-    // Pin 7
-    mov r2, #7
-    lsl r3, r2, #3
-    add r4, r0, r3
-    str r1, [r4]
-    
-    // Pin 8
-    mov r2, #8
-    lsl r3, r2, #3
-    add r4, r0, r3
-    str r1, [r4]
-    
-    // Pin 9
-    mov r2, #9
-    lsl r3, r2, #3
-    add r4, r0, r3
-    str r1, [r4]
-    
-    // 2. Set the output directions
-    ldr r0, =0xd0000020   // SIO_GPIO_OE (Output Enable register)
-    ldr r1, =0x398        // Bits 3,4,7,8,9 set as outputs; bit 5 as input
-    str r1, [r0]          // Apply the config
-    bx lr
+    PUSH    {r4, lr}
 
+    LDR     r4, =0x40014004
+    MOVS    r1, #5
+
+    MOVS    r2, #PIN_LATCH_IN
+    LSLS    r2, r2, #3
+    STR     r1, [r4, r2]
+
+    MOVS    r2, #PIN_CLK_IN
+    LSLS    r2, r2, #3
+    STR     r1, [r4, r2]
+
+    MOVS    r2, #PIN_DATA_IN
+    LSLS    r2, r2, #3
+    STR     r1, [r4, r2]
+
+    MOVS    r2, #PIN_DATA_OUT_A
+    LSLS    r2, r2, #3
+    STR     r1, [r4, r2]
+
+    MOVS    r2, #PIN_DATA_OUT_B
+    LSLS    r2, r2, #3
+    STR     r1, [r4, r2]
+
+    MOVS    r2, #PIN_CLK_OUT
+    LSLS    r2, r2, #3
+    STR     r1, [r4, r2]
+
+    LDR     r0, =0xD0000024
+    LDR     r1, =0x398
+    STR     r1, [r0]
+
+    LDR     r0, =0xD0000028
+    MOVS    r1, #(1 << PIN_DATA_IN)
+    STR     r1, [r0]
+
+    POP     {r4, pc}
+
+    .thumb_func
 loop:
-    bl readRegister       // Get the 32-bit value from the switches
-    mov r0, r0            // Value is already in r0
-    ldr r1, =decimalDigitArray
-    bl convertToDecimalArray // Turn binary into digits
-    ldr r0, =decimalDigitArray
-    ldr r1, =segmentValues
-    bl convertToSegmentValues // Turn digits into 7-seg codes
-    ldr r0, =segmentValues
-    bl writeRegister      // Send codes to the displays
-    b loop                // Do it all over again
+    PUSH    {r4, lr}
 
-readRegister:
-    push {r4, r5, lr}
-    ldr r4, =0xd0000000   // GPIO base address
-    
-    // Pull latch low to let registers get values from switches
-    mov r1, # (1 << PIN_LATCH_IN)
-    str r1, [r4, #0x18]   // Clear pin
-    
-    // Quick clock pulse to trigger the read
-    mov r1, # (1 << PIN_CLK_IN)
-    str r1, [r4, #0x14]   // Set pin
-    bl delay_1us
-    str r1, [r4, #0x18]   // Clear pin
-    bl delay_1us
-    
-    // Pull latch high to lock the values in
-    mov r1, # (1 << PIN_LATCH_IN)
-    str r1, [r4, #0x14]   // Set pin
-    
-    mov r0, #0            // Clear our result register
-    mov r5, #32           // We need to read 32 bits total
-read_loop:
-    // Check if the data pin is high or low
-    ldr r2, [r4, #0x24]   // Read all input pins
-    mov r1, # (1 << PIN_DATA_IN)
-    tst r2, r1
-    mov r3, #0
-    beq read_bit_zero
-    mov r3, #1
-read_bit_zero:
-    // Shift the bit we just read into the result
-    lsl r0, r0, #1
-    orr r0, r0, r3
-    
-    // Clock pulse to move to the next bit in the register
-    mov r1, # (1 << PIN_CLK_IN)
-    str r1, [r4, #0x14]   // Set
-    bl delay_1us
-    str r1, [r4, #0x18]   // Clear
-    bl delay_1us
-    
-    sub r5, r5, #1       // One less bit to go
-    cmp r5, #0
-    bne read_loop         // Repeat until all 32 are read
-    
-    pop {r4, r5, pc}
+    BL      read_register
+    MOV     r4, r0
 
-writeRegister:
-    push {r4, r5, r6, r7, lr}
-    ldr r4, =0xd0000000   // GPIO base address
-    mov r5, #0            // i = 0 (digit counter)
-    mov r1, #1            // Constant 1 for testing bits
-write_outer:
-    // Grab the segment codes for both channels (going backwards)
-    // R0 is the pointer to our segment values array
-    mov r2, #9
-    sub r2, r2, r5
-    ldrb r2, [r0, r2]     // Byte for channel A
-    
-    mov r3, #4
-    sub r3, r3, r5
-    ldrb r3, [r0, r3]     // Byte for channel B
-    
-    mov r6, #0            // j = 0 (bit counter)
-write_inner:
-    // Handle channel A bit
-    mov r7, r2
-    lsr r7, r6            // Shift current bit to the end
-    tst r7, r1            // Use r1 for the constant 1
-    beq set_a_low
-    
-    ldr r2, =PIN_DATA_OUT_A_MASK
-    ldr r2, [r2]
-    str r2, [r4, #0x14]   // Set pin high
-    b clock_pulse
-set_a_low:
-    ldr r2, =PIN_DATA_OUT_A_MASK
-    ldr r2, [r2]
-    str r2, [r4, #0x18]   // Set pin low
+    SUB     sp, sp, #12
+    MOVS    r1, #0
+    STR     r1, [sp, #0]
+    STR     r1, [sp, #4]
+    STR     r1, [sp, #8]
 
-clock_pulse:
-    // Handle channel B bit
-    mov r7, r3
-    lsr r7, r6            // Shift current bit to the end
-    tst r7, r1            // Use r1 for the constant 1
-    beq set_b_low
-    
-    ldr r2, =PIN_DATA_OUT_B_MASK
-    ldr r2, [r2]
-    str r2, [r4, #0x14]   // Set pin high
-    b pulse_clock
-set_b_low:
-    ldr r2, =PIN_DATA_OUT_B_MASK
-    ldr r2, [r2]
-    str r2, [r4, #0x18]   // Set pin low
+    STR     r4, [sp, #0]
 
-pulse_clock:
-    // Send a clock pulse to push the bits into the shift register
-    ldr r2, =PIN_CLK_OUT_MASK
-    ldr r2, [r2]
-    str r2, [r4, #0x14]   // High
-    bl delay_1us
-    str r2, [r4, #0x18]   // Low
-    bl delay_1us
-    
-    add r6, r6, #1        // Move to next bit
-    cmp r6, #8
-    bne write_inner       // Do 8 bits per byte
-    
-    add r5, r5, #1        // Move to next digit
-    cmp r5, #5
-    bne write_outer       // Do 5 digits per channel
-    
-    pop {r4, r5, r6, r7, pc}
+    MOV     r0, sp
+    BL      write_register
 
-delay_1us:
-    push {r4}
-    mov r4, #30          // Just a small loop to waste some time
-delay_loop:
-    sub r4, r4, #1
-    cmp r4, #0
-    bne delay_loop
-    pop {r4}
-    bx lr
+    ADD     sp, sp, #12
+    POP     {r4, pc}
 
+    .thumb_func
+    .global write_register
+write_register:
+    PUSH    {r4, r5, r6, r7, lr}
+    SUB     sp, sp, #12
+    MOV     r4, r0
+
+    MOVS    r0, #0
+.rev_loop:
+    # MOVS    r1, #(NUM_DIGITS - 1)
+    # SUBS    r1, r1, r0 
+    # ADDS    r2, r4, r1
+    LDRB    r2, [r2]
+    MOV     r3, sp
+    ADDS    r3, r3, r0
+    STRB    r2, [r3]
+
+    ADDS    r0, r0, #1
+    CMP     r0, #NUM_DIGITS
+    BLT     .rev_loop
+
+    LDR     r4, =SIO_BASE
+    MOVS    r5, #1
+    LSLS    r5, r5, #PIN_CLK_OUT
+
+    MOVS    r6, #0
+
+.outer_loop:
+    MOVS    r7, #0
+
+.inner_loop:
+    MOV     r0, sp
+    ADDS    r0, r0, r6
+    LDRB    r0, [r0]
+    LSRS    r0, r0, r7
+    MOVS    r1, #1
+    ANDS    r0, r0, r1
+
+    MOVS    r1, #1
+    LSLS    r1, r1, #PIN_DATA_OUT_A
+    CMP     r0, #1
+    BEQ     .set_a_high
+    STR     r1, [r4, #SIO_GPIO_OUT_CLR]
+    B       .done_a
+.set_a_high:
+    STR     r1, [r4, #SIO_GPIO_OUT_SET]
+.done_a:
+
+    MOVS    r2, #(NUM_DIGITS/2)
+    ADDS    r2, r2, r6
+    MOV     r3, sp
+    ADDS    r2, r3, r2
+    LDRB    r2, [r2]
+    LSRS    r2, r2, r7
+    MOVS    r3, #1
+    ANDS    r2, r2, r3
+
+    MOVS    r3, #1
+    LSLS    r3, r3, #PIN_DATA_OUT_B
+    CMP     r2, #1
+    BEQ     .set_b_high
+    STR     r3, [r4, #SIO_GPIO_OUT_CLR]
+    B       .done_b
+.set_b_high:
+    STR     r3, [r4, #SIO_GPIO_OUT_SET]
+.done_b:
+
+    LDR     r0, =DELAY_3US
+.wr_delay_a:
+    SUBS    r0, r0, #1
+    BNE     .wr_delay_a
+
+    STR     r5, [r4, #SIO_GPIO_OUT_SET]
+
+    LDR     r0, =DELAY_3US
+.wr_delay_b:
+    SUBS    r0, r0, #1
+    BNE     .wr_delay_b
+
+    STR     r5, [r4, #SIO_GPIO_OUT_CLR]
+
+    ADDS    r7, r7, #1
+    CMP     r7, #8
+    BLT     .inner_loop
+
+    ADDS    r6, r6, #1
+    CMP     r6, #(NUM_DIGITS/2)
+    BLT     .outer_loop
+
+    ADD     sp, sp, #12
+    POP     {r4, r5, r6, r7, pc}
+
+    .thumb_func
+read_register:
+    PUSH    {r4, r5, r6, r7, lr}
+
+    LDR     r4, =SIO_BASE
+    MOVS    r5, #(1 << PIN_LATCH_IN)
+    MOVS    r6, #(1 << PIN_CLK_IN)
+    MOVS    r7, #0
+
+    STR     r5, [r4, #SIO_GPIO_OUT_CLR] 
+    STR     r6, [r4, #SIO_GPIO_OUT_SET] 
+
+    LDR     r0, =DELAY_3US
+.delay_a:
+    SUBS    r0, r0, #1
+    BNE     .delay_a
+
+    STR     r6, [r4, #SIO_GPIO_OUT_CLR]
+
+    LDR     r0, =DELAY_3US
+.delay_b:
+    SUBS    r0, r0, #1
+    BNE     .delay_b
+
+    STR     r5, [r4, #SIO_GPIO_OUT_SET] 
+
+    MOVS    r1, #31
+
+.read_loop:
+    LDR     r0, [r4, #SIO_GPIO_IN]
+    MOVS    r2, #(1 << PIN_DATA_IN)
+    ANDS    r0, r0, r2
+    LSRS    r0, r0, #PIN_DATA_IN
+    LSLS    r0, r0, r1
+    ORRS    r7, r7, r0
+
+    STR     r6, [r4, #SIO_GPIO_OUT_SET] 
+
+    LDR     r0, =DELAY_3US
+.delay_c:
+    SUBS    r0, r0, #1
+    BNE     .delay_c
+
+    STR     r6, [r4, #SIO_GPIO_OUT_CLR]
+
+    LDR     r0, =DELAY_3US
+.delay_d:
+    SUBS    r0, r0, #1
+    BNE     .delay_d
+
+    SUBS    r1, r1, #1
+    BPL     .read_loop
+
+    MOVS    r0, r7
+    POP     {r4, r5, r6, r7, pc}
 
 
 convertToSegmentValues:
-    push {r4, r5, lr}
-    mov r4, #0            // i = 0
-conv_seg_loop:
-    ldrb r2, [r0, r4]     // Get digit from decimalDigitArray
-    ldr r3, =segmentCodes // Get table address
-    ldrb r3, [r3, r2]     // Get code for that digit
-    strb r3, [r1, r4]     // Store it in segmentValues
-    add r4, r4, #1
-    cmp r4, #10
-    bne conv_seg_loop
-    pop {r4, r5, pc}
+
 
 convertToDecimalArray:
-    push {r4, r5, r6, lr}
-    mov r4, #0            // Digit counter i = 0
-decimal_loop:
-    // Division by 10: r0 is the number to divide
-    mov r2, #0            // Quotient = 0
-    mov r3, #0            // Remainder = 0
-    mov r5, #31           // Start from MSB
-    mov r6, #1            // Constant 1
-div_bit_loop:
-    lsl r3, r3, #1        // Remainder = Remainder * 2
-    // Extract bit from r0 at position r5
-    mov r7, #1
-    lsl r7, r5
-    tst r0, r7
-    beq skip_bit
-    orr r3, r3, r6        // Use r6 for the constant 1
-skip_bit:
-    cmp r3, #10
-    blt skip_sub
-    sub r3, r3, #10       // Subtract 10 from remainder
-    add r2, r2, #1        // Increment quotient
-skip_sub:
-    sub r5, r5, #1        // Move to next bit
-    cmp r5, #0            // Check if we've finished bit 0
-    bge div_bit_loop
-    
-    // Now r3 is the remainder (r0 % 10)
-    // Store the remainder in decimalDigitArray
-    ldr r1, =decimalDigitArray
-    strb r3, [r1, r4]
-    
-    // Set r0 to the quotient for the next digit
-    mov r0, r2
-    
-    add r4, r4, #1        // Next digit
-    cmp r4, #10
-    bne decimal_loop
-    
-    pop {r4, r5, r6, pc}
 
 
-
-
-// Lookup table for reversed segment codes
-.section .data
+    .section .data
 segmentCodes:
-    .byte 0b11111100 // 0
-    .byte 0b01100000 // 1
-    .byte 0b11011010 // 2
-    .byte 0b11110010 // 3
-    .byte 0b01100110 // 4
-    .byte 0b10110110 // 5
-    .byte 0b10111110 // 6
-    .byte 0b11100000 // 7
-    .byte 0b11111110 // 8
-    .byte 0b11100110 // 9
+    .byte 0b11111100    # 0
+    .byte 0b01100000    # 1
+    .byte 0b11011010    # 2
+    .byte 0b11110010    # 3
+    .byte 0b01100110    # 4
+    .byte 0b10110110    # 5
+    .byte 0b10111110    # 6
+    .byte 0b11100000    # 7
+    .byte 0b11111110    # 8
+    .byte 0b11100110    # 9
 
 decimalDigitArray:
     .space 10
 
 segmentValues:
     .space 10
-
-PIN_DATA_OUT_A_MASK: .word (1 << PIN_DATA_OUT_A)
-PIN_DATA_OUT_B_MASK: .word (1 << PIN_DATA_OUT_B)
-PIN_CLK_OUT_MASK:    .word (1 << PIN_CLK_OUT)
-
