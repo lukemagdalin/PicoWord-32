@@ -131,7 +131,7 @@ inner_loop:
 
     movs    r1, #1              # Prepare to toggle channel A
     lsls    r1, r1, #PIN_DATA_OUT_A # r1 = channel A pin mask
-    cmp     r0, #1              # Is our data bit a 1?
+    cmp     r0, #1              # Is data bit a 1?
     beq     set_a_high         # If yes, branch to set it high
     str     r1, [r4, #SIO_GPIO_OUT_CLR] # Else, pull channel A pin LOW
     b       done_a             # Skip the high setting
@@ -180,7 +180,7 @@ wr_delay_b:
     CMP     r6, #(NUM_DIGITS/2) # Have we done 5 bytes?
     blt     outer_loop         # If not, do next byte
 
-    ADD     sp, sp, #12         # Clean up our stack array
+    ADD     sp, sp, #12         # Clean up stack array
     POP     {r4, r5, r6, r7, pc} # Restore registers and return
 
     .thumb_func
@@ -190,10 +190,10 @@ read_register:
     LDR     r4, =SIO_BASE       # Load fast GPIO base address
     MOVS    r5, #(1 << PIN_LATCH_IN) # Mask for Latch pin
     MOVS    r6, #(1 << PIN_CLK_IN)   # Mask for Clock pin
-    MOVS    r7, #0              # r7 will accumulate our 32 bits, start at 0
+    MOVS    r7, #0              # r7 will accumulate 32 bits, start at 0
 
-    STR     r5, [r4, #SIO_GPIO_OUT_CLR] # Pull LATCH LOW (loads data into shift reg)
-    STR     r6, [r4, #SIO_GPIO_OUT_SET] # Pull CLK HIGH (prep for toggle)
+    STR     r5, [r4, #SIO_GPIO_OUT_CLR] # Pull LATCH LOW 
+    STR     r6, [r4, #SIO_GPIO_OUT_SET] # Pull CLK HIGH 
 
     LDR     r0, =DELAY      # Tiny delay
 delay_a:
@@ -213,11 +213,11 @@ delay_b:
 
 read_loop:
     LDR     r0, [r4, #SIO_GPIO_IN] # Read the state of ALL pins right now
-    MOVS    r2, #(1 << PIN_DATA_IN) # Mask for just our data pin
-    ANDS    r0, r0, r2          # Zero out everything except our pin
+    MOVS    r2, #(1 << PIN_DATA_IN) # Mask for just data pin
+    ANDS    r0, r0, r2          # Zero out everything except  pin
     LSRS    r0, r0, #PIN_DATA_IN # Shift it down so r0 is exactly 0 or 1
-    LSLS    r0, r0, r1          # (THE FIX) Shift the 0 or 1 back up into the i-th position
-    ORRS    r7, r7, r0          # Slap it into our accumulator register using OR
+    LSLS    r0, r0, r1          # Shift the 0 or 1 back up into the i-th position
+    ORRS    r7, r7, r0          # Slap it into accumulator register using OR
 
     STR     r6, [r4, #SIO_GPIO_OUT_SET] # Pulse clock HIGH
 
@@ -233,10 +233,10 @@ delay_d:
     subs    r0, r0, #1
     bne     delay_d
 
-    subs    r1, r1, #1          # Decrement our bit counter
-    bpl     read_loop          # If i is still >= 0, keep looping!
+    subs    r1, r1, #1          # Decrement bit counter
+    bpl     read_loop          # If i is still >= 0, keep looping
 
-    movs    r0, r7              # Move our final 32-bit number into r0 to return it
+    movs    r0, r7              # Move final 32-bit number into r0 to return it
     pop     {r4, r5, r6, r7, pc} # Pop everything and return
 
 
@@ -321,7 +321,6 @@ segmentValues:
 #read_register:
 #push {r0-r3}
 #ldr r4, =SIO_BASE
-#// read_bytes variable stored at 0x20000000, we will alter
 #ldr r0, =0x20000000
 #
 #movs r1, #(1 << PIN_LATCH_IN)
@@ -375,7 +374,7 @@ segmentValues:
 #convert_to_segment_values: 
 #
 #
-#//delay bs here, heavy reuse, we do not care
+#//delay bs here, heavy reuse, I do not care
 #
 #delay:
 #push {r0-r3}
