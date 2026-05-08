@@ -111,7 +111,7 @@ rev_loop:
 
     ADDS    r0, r0, #1          # i++
     CMP     r0, #NUM_DIGITS     # Have we hit 10 elements yet?
-    BLT     rev_loop           # If not, keep looping
+    blt     rev_loop           # If not, keep looping
 
     LDR     r4, =SIO_BASE       # Load the SIO base address for fast toggling
     MOVS    r5, #1              # Prepare a 1
@@ -130,12 +130,12 @@ inner_loop:
     MOVS    r1, #1              # Masking value
     ANDS    r0, r0, r1          # AND it with 1 so r0 is exactly 0 or 1
 
-    MOVS    r1, #1              # Prepare to toggle Bank A
-    LSLS    r1, r1, #PIN_DATA_OUT_A # r1 = Bank A pin mask
-    CMP     r0, #1              # Is our data bit a 1?
-    BEQ     set_a_high         # If yes, branch to set it high
-    STR     r1, [r4, #SIO_GPIO_OUT_CLR] # Else, pull Bank A pin LOW
-    B       done_a             # Skip the high setting
+    movs    r1, #1              # Prepare to toggle Bank A
+    lsls    r1, r1, #PIN_DATA_OUT_A # r1 = Bank A pin mask
+    cmp     r0, #1              # Is our data bit a 1?
+    beq     set_a_high         # If yes, branch to set it high
+    str     r1, [r4, #SIO_GPIO_OUT_CLR] # Else, pull Bank A pin LOW
+    b       done_a             # Skip the high setting
 set_a_high:
     STR     r1, [r4, #SIO_GPIO_OUT_SET] # Pull Bank A pin HIGH
 done_a:
@@ -152,9 +152,9 @@ done_a:
     MOVS    r3, #1              # Prepare to toggle Bank B
     LSLS    r3, r3, #PIN_DATA_OUT_B # r3 = Bank B pin mask
     CMP     r2, #1              # Is Bank B's data bit a 1?
-    BEQ     set_b_high         # If yes, branch to high
+    beq     set_b_high         # If yes, branch to high
     STR     r3, [r4, #SIO_GPIO_OUT_CLR] # Else, pull Bank B pin LOW
-    B       done_b             # Skip the high setting
+    b       done_b             # Skip the high setting
 set_b_high:
     STR     r3, [r4, #SIO_GPIO_OUT_SET] # Pull Bank B pin HIGH
 done_b:
@@ -175,11 +175,11 @@ wr_delay_b:
 
     ADDS    r7, r7, #1          # j++ (move to next bit)
     CMP     r7, #8              # Have we done all 8 bits in the byte?
-    BLT     inner_loop         # If not, do next bit
+    blt     inner_loop         # If not, do next bit
 
     ADDS    r6, r6, #1          # i++ (move to next byte)
     CMP     r6, #(NUM_DIGITS/2) # Have we done 5 bytes?
-    BLT     outer_loop         # If not, do next byte
+    blt     outer_loop         # If not, do next byte
 
     ADD     sp, sp, #12         # Clean up our stack array
     POP     {r4, r5, r6, r7, pc} # Restore registers and return
