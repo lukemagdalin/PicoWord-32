@@ -1,7 +1,8 @@
 # Authors: Luke Magdalin, Andrew Harnett
 # EECE.3170 Microprocessors I
 # University of Massachusetts Lowell
-# March 19, 2026
+#Both Andrew and Luke worked on this equally, 50/50 split. The bottom implementation was done mostly by Andrew and the upper mostly by Luke. 
+# Last Edit: May 7th, 2026
 .syntax unified            
 .cpu cortex-m0plus          
 
